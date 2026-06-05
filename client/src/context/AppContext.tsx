@@ -1,123 +1,191 @@
-import {AxiosInstance} from "axios";
-import axios from "axios";
-import { config } from "node:process";
-import {createContext, useState, type ReactNode} from "react";
+import axios, { type AxiosInstance } from "axios";
+import {
+  createContext,
+  useState,
+  useEffect,
+  useContext,
+  type ReactNode,
+} from "react";
 
-interface User{
-   id: string;
-   name: string;
-   email: string; 
-   plan: string;
-   analysisCount?: number;
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  plan: string;
+  analysisCount?: number;
 }
 
 interface AppContextType {
-    user: User | null;
-    token: string | null;
-    loading: boolean;
-    api: AxiosInstance;
-    login: (email: string, password: string)=> Promise<{sucess: boolean; message?: string}>;
-    register: (name: string, email: string, password: string)=> Promise<{sucess: boolean; message?: string}>;
-    logout: ()=> void;
+  user: User | null;
+  token: string | null;
+  loading: boolean;
+  api: AxiosInstance;
+  login: (
+    email: string,
+    password: string
+  ) => Promise<{ success: boolean; message?: string }>;
+  register: (
+    name: string,
+    email: string,
+    password: string
+  ) => Promise<{ success: boolean; message?: string }>;
+  logout: () => void;
 }
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000/"
-
+const BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export  function AppProvider({children}:{children: ReactNode}){
+export function AppProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(
+    localStorage.getItem("token")
+  );
+  const [loading, setLoading] = useState(true);
 
-const [user, setUser] =  useState<User | null>(null);
-const [token, setToken] =  useState<string | null>(localStorage.getItem("token"));
-const [loading, setLoading] =  useState(true);
-
-// Axios instance with auth header
-const api = axios.create({
+  // Axios instance
+  const api = axios.create({
     baseURL: BACKEND_URL,
+  });
 
-})
+  // Attach token to requests
+  api.interceptors.request.use((config) => {
+    const storedToken = localStorage.getItem("token");
 
-// update axios headers when token changes
-api.interceptors.request.use((config)=>{
-    const token = localStorage.getItem("token");
-
-    if(token){
-        config.headers.Authorization = `Bearer ${token}`;
+    if (storedToken) {
+      config.headers.Authorization = `Bearer ${storedToken}`;
     }
+
     return config;
-})
+  });
 
-const loadUser = async ()=>{
-if(!token){
+  const loadUser = async () => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { data } = await api.get("/api/auth/user");
+
+      if (data.success) {
+        setUser(data.user);
+      } else {
+        setUser(null);
+      }
+    } catch (error) {
+      localStorage.removeItem("token");
+      setToken(null);
+      setUser(null);
+    }
+
     setLoading(false);
-    return;
-}
-try {
-const {data} = await api.get("/api/auth/user");
-if(data.success){
-    setUser(data.user);
-}
-}catch (error) {
-  localStorage.removeItem("token");
-  setToken(null);
-  setUser(null);
-}
-setLoading(false);
-}
+  };
 
-useEffect(()=>{
-  loadUser();  
-},[])
+  useEffect(() => {
+    loadUser();
+  }, [token]);
 
-const login =  async(email: string, password: string)=>{
-try{
-  const res =  await axios.post(`${BACKEND_URL}/api/auth/login`, {email, password});
-if (res.data.success){
-    setToken(res.data.token);
-    setUser(res.data.user);
-    localStorage.setItem("token", res.data.token);
-    return {success: true};
-}
-return {sucess: false, message: res.data.message}
-} catch (error:any) {
-   return {success: false, message: error.response?.data?.message || "Login failed"};
-}
-}
+  // ================= LOGIN =================
+  const login = async (email: string, password: string) => {
+    try {
+      const { data } = await axios.post(
+        `${BACKEND_URL}/api/auth/login`,
+        { email, password }
+      );
 
-const register =  async(name: string, email:string, password: string)=>{
-    try{
-  const res =  await axios.post(`${BACKEND_URL}/api/auth/register`, {name,email, password});
-if (res.data.success){
-    setToken(res.data.token);
-    setUser(res.data.user);
-    localStorage.setItem("token", res.data.token);
-    return {success: true};
-}
-return {sucess: false, message: res.data.message}
-} catch (error:any) {
-   return {success: false, message: error.response?.data?.message || "Registration failed"};
-}
-}
+      if (!data?.success) {
+        return {
+          success: false,
+          message: data?.message || "Login failed",
+        };
+      }
 
-const logout =  async()=>{
-   setToken(null);
-    setUser(null); 
+      setToken(data.token);
+      setUser(data.user);
+      localStorage.setItem("token", data.token);
+
+      return {
+        success: true,
+        message: data.message || "Login successful",
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message:
+          error.response?.data?.message || "Login failed",
+      };
+    }
+  };
+
+  // ================= REGISTER =================
+  const register = async (
+    name: string,
+    email: string,
+    password: string
+  ) => {
+    try {
+      const { data } = await axios.post(
+        `${BACKEND_URL}/api/auth/register`,
+        { name, email, password }
+      );
+
+      if (!data?.success) {
+        return {
+          success: false,
+          message: data?.message || "Registration failed",
+        };
+      }
+
+      setToken(data.token);
+      setUser(data.user);
+      localStorage.setItem("token", data.token);
+
+      return {
+        success: true,
+        message: data.message || "Account created successfully",
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message:
+          error.response?.data?.message ||
+          "Registration failed",
+      };
+    }
+  };
+
+  // ================= LOGOUT =================
+  const logout = () => {
+    setToken(null);
+    setUser(null);
     localStorage.removeItem("token");
-}
+  };
 
-  
-const value = {user, token, loading, api, login, register,logout}
+  const value: AppContextType = {
+    user,
+    token,
+    loading,
+    api,
+    login,
+    register,
+    logout,
+  };
 
-    return <AppContext.Provider value={value}>
-        {children}
+  return (
+    <AppContext.Provider value={value}>
+      {children}
     </AppContext.Provider>
+  );
 }
 
+export function useApp() {
+  const context = useContext(AppContext);
 
-export function useApp(){
-    const context = useContext(AppContext);
-    if(!context) throw new Error("useApp must be used within an AppProvider");
-    return context;
+  if (!context) {
+    throw new Error("useApp must be used within an AppProvider");
+  }
+
+  return context;
 }
-

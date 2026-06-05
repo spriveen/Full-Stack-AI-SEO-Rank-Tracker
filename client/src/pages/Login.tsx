@@ -1,22 +1,48 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Mail, Lock, Loader2, ChartNoAxesColumnIcon, User2Icon } from "lucide-react";
+import { useApp } from "../context/AppContext";
+import toast from "react-hot-toast";
 
 export default function Login({ state }: { state: string }) {
     const [isLoginState, setIsLoginState] = useState(state === "login");
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [loading] = useState(false);
+    const [loading, setLoading] = useState(false);
 
-    const handleSubmit = async (e: React.SubmitEvent) => {
+    const { login, register } = useApp();
+
+    const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setLoading(true);
+
+        let result;
+
+        if (isLoginState) {
+            result = await login(email, password);
+        } else {
+            result = await register(name, email, password);
+        }
+
+        if (result.success) {
+            const redirect = searchParams.get("redirect") || "/dashboard";
+            toast.success(result.message || "Success");
+            navigate(redirect);
+        } else {
+            toast.error(result.message || "Login Failed.");
+        }
+
+        setLoading(false);
     };
 
     return (
         <div className="min-h-screen flex items-center justify-center px-4">
             <div className="w-full max-w-md">
-                {/* Logo */}
+
                 <div className="text-center mb-8">
                     <Link to="/" className="flex items-center justify-center gap-2 group mb-10">
                         <ChartNoAxesColumnIcon />
@@ -24,12 +50,14 @@ export default function Login({ state }: { state: string }) {
                     </Link>
                 </div>
 
-                {/* Form Card */}
                 <div className="bg-card border border-border rounded-2xl p-8">
                     <form onSubmit={handleSubmit} className="space-y-5">
+
                         <div className="text-center py-5">
                             <h1 className="text-2xl text-foreground">Welcome back</h1>
-                            <p className="text-muted-foreground text-sm mt-1">{isLoginState ? "Sign in to your" : "Create an"} Rank Pilot account</p>
+                            <p className="text-muted-foreground text-sm mt-1">
+                                {isLoginState ? "Sign in to your" : "Create an"} Rank Pilot account
+                            </p>
                         </div>
 
                         {!isLoginState && (
@@ -48,6 +76,7 @@ export default function Login({ state }: { state: string }) {
                                 </div>
                             </label>
                         )}
+
                         <label>
                             <div className="block text-sm text-foreground mb-1.5 mt-4">Email</div>
                             <div className="relative">
@@ -82,20 +111,25 @@ export default function Login({ state }: { state: string }) {
                             type="submit"
                             disabled={loading}
                             className="w-full py-3 mt-5 rounded-lg bg-primary text-sm text-primary-foreground flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
-                            id="login-submit-btn"
-                            style={{ color: "var(--background)" }}
                         >
-                            {loading ? <Loader2 size={18} className="animate-spin" /> : isLoginState ? "Sign In" : "Create Account"}
+                            {loading
+                                ? <Loader2 size={18} className="animate-spin" />
+                                : isLoginState ? "Sign In" : "Create Account"}
                         </button>
+
                     </form>
                 </div>
 
                 <p className="text-center text-sm text-muted-foreground mt-6">
                     {isLoginState ? "Don't have an account?" : "Already have an account?"}
-                    <button onClick={() => setIsLoginState((prev) => !prev)} className="text-primary hover:underline font-medium pl-1">
+                    <button
+                        onClick={() => setIsLoginState(prev => !prev)}
+                        className="text-primary hover:underline font-medium pl-1"
+                    >
                         {isLoginState ? "Sign up" : "Sign in"}
                     </button>
                 </p>
+
             </div>
         </div>
     );
